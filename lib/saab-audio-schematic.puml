@@ -1,0 +1,48 @@
+@startuml saab
+!theme spacelab
+
+class BluetoothAudio {
+    + next()
+    + prev()
+    + play()
+    + pause()
+    + readMetadata()
+}
+note top of BluetoothAudio
+  Max priority for best audio
+end note
+
+class SIDMessageController {
+    + sendMessage(string message)
+    + receive(CANFrame* frame)
+}
+
+class CDCEmulator {
+    + run()
+    + receive(CANFrame* frame)
+    - task()
+    - mainTask()
+}
+note top of CDCEmulator
+  Priority 2 for all tasks
+end note
+
+class CAN {
+    + send()
+    + addListener()
+    - sendTask()
+    - receiveTask()
+}
+note right of CAN::"sendTask()"
+  Priority 3
+end note
+note right of CAN::"receiveTask()"
+  Priority 1, will block sendTask with mutex
+end note
+
+BluetoothAudio <-right- CDCEmulator
+CDCEmulator -up-> SIDMessageController
+CAN <.left.> CDCEmulator
+SIDMessageController <.> CAN
+
+@enduml
