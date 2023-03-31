@@ -3,13 +3,11 @@
 #include <array>
 #include "mcp_can.h"
 #include "../../include/defines.h"
-
-#define CAN_CS_PIN 5
-
-#define I_BUS CAN_47KBPS
-#define P_BUS CAN_500KBPS
+#include "driver/gpio.h"
+#include "driver/twai.h"
 
 #define SAAB_CAN_MSG_LENGTH 8
+#define TWAI_TIMING_CONFIG_47_619KBITS() {.brp = 80, .tseg_1 = 15, .tseg_2 = 5, .sjw = 3, .triple_sampling = false}
 
 enum class SAAB_CAN_ID
 {
@@ -37,7 +35,7 @@ enum SAAB_CAN_LISTENER_TYPE : uint8_t
 class SaabCANListener
 {
 public:
-    virtual void receive(SAAB_CAN_ID id, uint8_t len, uint8_t *buf) = 0;
+    virtual void receive(SAAB_CAN_ID id, uint8_t *buf) = 0;
 };
 
 struct SaabCANMessage
@@ -57,19 +55,15 @@ public:
 
 private:
     void receiveTask(void *arg);
-    void sendTask(void *arg);
+    void alertTask(void *arg);
     static void receiveTaskCb(void *arg);
-    static void sendTaskCb(void *arg);
+    static void alertTaskCb(void *arg);
 
     std::array<SaabCANListener *, SAAB_CAN_LISTENER_TYPE::N_TYPES> _listeners;
 
-    TaskHandle_t _receiveTaskHandle;
-    TaskHandle_t _sendTaskHandle;
-    QueueHandle_t _queue;
-    SemaphoreHandle_t _mutex;
-
-    MCP_CAN _mcp;
-    SPIClass *_spi;
+    TaskHandle_t _receiveTaskHandle = NULL;
+    TaskHandle_t _alertTaskHandle = NULL;
+    SemaphoreHandle_t _mutex = NULL;
 
     const char* LOG_TAG = "CAN";
 };

@@ -2,7 +2,7 @@
 
 SaabCAN *canInstance;
 
-SaabCAN::SaabCAN() : _mcp(_spi = new SPIClass(), CAN_CS_PIN)
+SaabCAN::SaabCAN()
 {
     canInstance = this;
     _listeners.fill(nullptr);
@@ -10,48 +10,104 @@ SaabCAN::SaabCAN() : _mcp(_spi = new SPIClass(), CAN_CS_PIN)
 
 SaabCAN::~SaabCAN()
 {
-    delete _spi;
 }
 
 void SaabCAN::start()
 {
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_NO_ACK); // TODO: Change mode to normal if possible
+    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_47_619KBITS();
+    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+    if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK)
+    {
+        ESP_LOGD(LOG_TAG, "CAN driver installed");
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "Failed to install CAN driver");
+        assert(0);
+    }
+
+    if (twai_reconfigure_alerts(TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF, NULL) == ESP_OK)
+    {
+        ESP_LOGD(LOG_TAG, "Alerts reconfigured");
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "Failed to reconfigure alerts");
+    }
+
+    if (twai_start() == ESP_OK)
+    {
+        ESP_LOGD(LOG_TAG, "CAN driver started");
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "Failed to start CAN driver");
+        assert(0);
+    }
+
     _mutex = xSemaphoreCreateMutex();
-    _queue = xQueueCreate(3, sizeof(SaabCANMessage));
 
     if (_mutex == NULL)
     {
         ESP_LOGE(LOG_TAG, "Failed to create the mutex");
+        assert(0);
     }
 
-    if (_queue == NULL)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to create the queue");
-    }
-
-    while (_mcp.begin(MCP_ANY, I_BUS, MCP_8MHZ) != CAN_OK)
-    {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        ESP_LOGI(LOG_TAG, "Waiting for MCP...");
-    }
-
-    _mcp.setMode(MCP_NORMAL);
-
-    xTaskCreatePinnedToCore(receiveTaskCb, "CANReceive", 2048, NULL, 1, &_receiveTaskHandle, SAAB_TASK_CORE);
-    xTaskCreatePinnedToCore(sendTaskCb, "CANSend", 2048, NULL, 3, &_sendTaskHandle, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(receiveTaskCb, "CANReceive", 4096, NULL, 1, &_receiveTaskHandle, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(alertTaskCb, "CANAlerts", 4096, NULL, 1, &_alertTaskHandle, SAAB_TASK_CORE);
 }
 
 void SaabCAN::send(SAAB_CAN_ID id, const uint8_t *buf)
 {
     constexpr TickType_t delay = pdMS_TO_TICKS(20);
 
-    SaabCANMessage msg;
-    msg.id = id;
-    memcpy(&msg.data, buf, SAAB_CAN_MSG_LENGTH);
+    twai_message_t message;
+    message.flags = 0;
+    message.extd = 0; // 11 bit id
+    message.rtr = 0;
+    message.self = 0;
+    message.ss = 0;
+    message.dlc_non_comp = 0;
+    message.data_length_code = SAAB_CAN_MSG_LENGTH;
+    message.identifier = static_cast<uint32_t>(id);
 
-    ESP_LOGD(LOG_TAG, "Queueing message");
-    if (xQueueSend(_queue, &msg, delay) != pdTRUE)
+    memcpy(message.data, buf, SAAB_CAN_MSG_LENGTH);
+
+    // Queue message for transmission
+    xSemaphoreTake(_mutex, portMAX_DELAY);
+    esp_err_t result = twai_transmit(&message, delay);
+    xSemaphoreGive(_mutex);
+
+    if (result == ESP_OK)
     {
-        ESP_LOGE(LOG_TAG, "Failed to queue CAN message %x", static_cast<unsigned long>(id));
+        ESP_LOGD(LOG_TAG, "Message queued for transmission");
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "Failed to queue message for transmission");
+
+        switch (result)
+        {
+        case ESP_ERR_INVALID_ARG:
+            ESP_LOGE(LOG_TAG, "Invalid arguments");
+            break;
+        case ESP_ERR_TIMEOUT:
+            ESP_LOGE(LOG_TAG, "Timed out waiting for space in TX queue");
+            break;
+        case ESP_FAIL:
+            ESP_LOGE(LOG_TAG, "Queue is disabled and another message is transmitting");
+            break;
+        case ESP_ERR_INVALID_STATE:
+            ESP_LOGE(LOG_TAG, "TWAI driver is not in running state, or is not installed");
+            break;
+        case ESP_ERR_NOT_SUPPORTED:
+            ESP_LOGE(LOG_TAG, "Listen Only Mode does not support transmissions");
+        default:
+            ESP_LOGE(LOG_TAG, "Unknown error code %d", result);
+            break;
+        }
     }
 }
 
@@ -62,40 +118,75 @@ void SaabCAN::addListener(SaabCANListener *listener, SAAB_CAN_LISTENER_TYPE type
 
 void SaabCAN::receiveTask(void *arg)
 {
-    uint8_t len;
-    uint8_t data[8];
-    long unsigned id;
+    twai_message_t message;
 
     while (1)
     {
-        ESP_LOGD(LOG_TAG, "Checking CAN messages");
         xSemaphoreTake(_mutex, portMAX_DELAY);
+        esp_err_t result = twai_receive(&message, pdMS_TO_TICKS(5));
+        xSemaphoreGive(_mutex);
 
-        if (_mcp.checkReceive() == CAN_MSGAVAIL && _mcp.readMsgBuf(&id, &len, data) == CAN_OK)
+        if (result == ESP_OK)
         {
-            for (int i = 0; i < _listeners.size(); i++)
+            ESP_LOGD(LOG_TAG, "Message received");
+
+            ESP_LOGD(LOG_TAG, "ID: %x", message.identifier);
+
+            if (message.rtr)
             {
-                if (_listeners[i] != nullptr)
+                ESP_LOGD(LOG_TAG, "Frame is remote frame");
+            }
+            else
+            {
+                for (int i = 0; i < _listeners.size(); i++)
                 {
-                    _listeners[i]->receive(static_cast<SAAB_CAN_ID>(id), len, data);
+                    if (_listeners[i] != nullptr)
+                    {
+                        _listeners[i]->receive(static_cast<SAAB_CAN_ID>(message.identifier), message.data);
+                    }
                 }
             }
         }
-
-        xSemaphoreGive(_mutex);
+        else if (result != ESP_ERR_TIMEOUT)
+        {
+            ESP_LOGE(LOG_TAG, "Error with receiving. Check the configuration for TWAI");
+        }
     }
 }
 
-void SaabCAN::sendTask(void *arg)
+void SaabCAN::alertTask(void *arg)
 {
-    SaabCANMessage msg;
+    uint32_t alerts;
     while (1)
     {
-        xQueueReceive(_queue, &msg, portMAX_DELAY);
-        ESP_LOGD(LOG_TAG, "Sending message from queue");
-        xSemaphoreTake(_mutex, portMAX_DELAY);
-        _mcp.sendMsgBuf(static_cast<unsigned long>(msg.id), SAAB_CAN_MSG_LENGTH, msg.data);
-        xSemaphoreGive(_mutex);
+        twai_read_alerts(&alerts, portMAX_DELAY);
+        if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
+        {
+            ESP_LOGI(LOG_TAG, "Surpassed Error Warning Limit");
+        }
+        if (alerts & TWAI_ALERT_ERR_PASS)
+        {
+            ESP_LOGI(LOG_TAG, "Entered Error Passive state");
+        }
+        if (alerts & TWAI_ALERT_BUS_OFF)
+        {
+            ESP_LOGI(LOG_TAG, "Bus Off state");
+            // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
+            twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
+            for (int i = 3; i > 0; i--)
+            {
+                ESP_LOGW(LOG_TAG, "Initiate bus recovery in %d", i);
+                vTaskDelay(pdMS_TO_TICKS(1000));
+            }
+            twai_initiate_recovery(); // Needs 128 occurrences of bus free signal
+            ESP_LOGI(LOG_TAG, "Initiate bus recovery");
+        }
+        if (alerts & TWAI_ALERT_BUS_RECOVERED)
+        {
+            // Bus recovery was successful, exit control task to uninstall driver
+            ESP_LOGI(LOG_TAG, "Bus Recovered");
+            break;
+        }
     }
 }
 
@@ -104,7 +195,7 @@ void SaabCAN::receiveTaskCb(void *arg)
     canInstance->receiveTask(arg);
 }
 
-void SaabCAN::sendTaskCb(void *arg)
+void SaabCAN::alertTaskCb(void *arg)
 {
-    canInstance->sendTask(arg);
+    canInstance->alertTask(arg);
 }

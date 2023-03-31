@@ -15,6 +15,7 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 
 void CDCEmulator::start()
 {
+    _bt.set_auto_reconnect(false);
     _bt.start("SAAB Draken");
 
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
@@ -77,7 +78,11 @@ void CDCEmulator::statusTask(void *arg)
         case 8:
             ptrToResponse = powerDownResponse;
             break;
+        default:
+            ESP_LOGW(LOG_TAG, "Received unexpected value %d");
+            continue;
         }
+
 
         for (int i = 0; i < 4; i++)
         {
@@ -85,24 +90,23 @@ void CDCEmulator::statusTask(void *arg)
             {
                 vTaskDelay(delay);
             }
-
+        
+            ESP_LOGD(LOG_TAG, "Send CDC generic status [%d]", i);
             _can->send(SAAB_CAN_ID::CDC_TO_RADIO, ptrToResponse);
             ptrToResponse += 8;
         }
-
-        ESP_LOGD(LOG_TAG, "Send CDC generic status");
     }
 }
 
-void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
+void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t *buf)
 {
     switch (id)
     {
     case SAAB_CAN_ID::CDC_CONTROL:
-        handleRadioCommand(id, len, buf);
+        handleRadioCommand(id, buf);
         break;
     case SAAB_CAN_ID::RADIO_TO_CDC:
-        handleCDCStatusRequest(id, len, buf);
+        handleCDCStatusRequest(id, buf);
         break;
     }
 }
@@ -110,7 +114,7 @@ void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
 /**
  * Commands such as power on, off, next track, mute...
  */
-void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
+void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
 {
     // This will not work for long button presses as the CHANGED status will be 0 in that case
     if (buf[0] == RADIO_COMMAND_0::CHANGED)
@@ -119,7 +123,11 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
         {
         case RADIO_COMMAND_1::POWER_ON:
             _isEnabled = true;
-            _bt.reconnect();
+            _bt.set_auto_reconnect(true);
+            if (!_bt.is_connected())
+            {
+                _bt.reconnect();
+            }
             xTaskNotify(_mainTaskHandle, 0, eNoAction);
             break;
         case RADIO_COMMAND_1::POWER_OFF:
@@ -159,10 +167,17 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
     }
 }
 
-void CDCEmulator::handleCDCStatusRequest(SAAB_CAN_ID id, uint8_t len, uint8_t *buf)
+void CDCEmulator::handleCDCStatusRequest(SAAB_CAN_ID id, uint8_t *buf)
 {
-    uint8_t value = buf[3] & 0x0f;
-    xTaskNotify(_statusTaskHandle, value, eSetValueWithOverwrite);
+    if (_statusTaskHandle != NULL)
+    {
+        uint8_t value = buf[3] & 0x0f;
+        xTaskNotify(_statusTaskHandle, value, eSetValueWithOverwrite);
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "CDC status request failed as the task has not started");
+    }
 }
 
 void CDCEmulator::sendCDCStatus(bool hasStatusChanged)

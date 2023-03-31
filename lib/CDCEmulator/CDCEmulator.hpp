@@ -30,12 +30,12 @@ class CDCEmulator : public SaabCANListener
 public:
 	CDCEmulator();
 	void start();
-	void receive(SAAB_CAN_ID id, uint8_t len, uint8_t *buf);
+	void receive(SAAB_CAN_ID id, uint8_t *buf);
     void addCANInterface(SaabCAN *can);
 
 private:
-	void handleRadioCommand(SAAB_CAN_ID id, uint8_t len, uint8_t *buf);
-	void handleCDCStatusRequest(SAAB_CAN_ID id, uint8_t len, uint8_t *buf);
+	void handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf);
+	void handleCDCStatusRequest(SAAB_CAN_ID id, uint8_t *buf);
 	void sendCDCStatus(bool hasStatusChanged);
 	void task(void *arg);
 	void statusTask(void *arg);
@@ -44,9 +44,9 @@ private:
 
 	bool _isEnabled = false;
 	BluetoothAudio _bt;
-	SaabCAN *_can = nullptr;
-	TaskHandle_t _mainTaskHandle;
-	TaskHandle_t _statusTaskHandle;
+	SaabCAN *_can = NULL;
+	TaskHandle_t _mainTaskHandle = NULL;
+	TaskHandle_t _statusTaskHandle = NULL;
 
 	const char* LOG_TAG = "CDC";
 };
