@@ -14,7 +14,7 @@ SaabCAN::~SaabCAN()
 
 void SaabCAN::start()
 {
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_NO_ACK); // TODO: Change mode to normal if possible
+    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_NORMAL);
     twai_timing_config_t t_config = TWAI_TIMING_CONFIG_47_619KBITS();
     twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
@@ -28,15 +28,6 @@ void SaabCAN::start()
         assert(0);
     }
 
-    if (twai_reconfigure_alerts(TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF, NULL) == ESP_OK)
-    {
-        ESP_LOGD(LOG_TAG, "Alerts reconfigured");
-    }
-    else
-    {
-        ESP_LOGE(LOG_TAG, "Failed to reconfigure alerts");
-    }
-
     if (twai_start() == ESP_OK)
     {
         ESP_LOGD(LOG_TAG, "CAN driver started");
@@ -47,24 +38,13 @@ void SaabCAN::start()
         assert(0);
     }
 
-    _mutex = xSemaphoreCreateMutex();
-
-    if (_mutex == NULL)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to create the mutex");
-        assert(0);
-    }
-
     xTaskCreatePinnedToCore(receiveTaskCb, "CANReceive", 4096, NULL, 1, &_receiveTaskHandle, SAAB_TASK_CORE);
-    xTaskCreatePinnedToCore(alertTaskCb, "CANAlerts", 4096, NULL, 1, &_alertTaskHandle, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(alertTaskCb, "CANAlerts", 2048, NULL, 1, &_alertTaskHandle, SAAB_TASK_CORE);
 }
 
 void SaabCAN::send(SAAB_CAN_ID id, const uint8_t *buf)
 {
-    constexpr TickType_t delay = pdMS_TO_TICKS(20);
-
     twai_message_t message;
-    message.flags = 0;
     message.extd = 0; // 11 bit id
     message.rtr = 0;
     message.self = 0;
@@ -76,13 +56,11 @@ void SaabCAN::send(SAAB_CAN_ID id, const uint8_t *buf)
     memcpy(message.data, buf, SAAB_CAN_MSG_LENGTH);
 
     // Queue message for transmission
-    xSemaphoreTake(_mutex, portMAX_DELAY);
-    esp_err_t result = twai_transmit(&message, delay);
-    xSemaphoreGive(_mutex);
+    esp_err_t result = twai_transmit(&message, pdMS_TO_TICKS(20));
 
     if (result == ESP_OK)
     {
-        ESP_LOGD(LOG_TAG, "Message queued for transmission");
+        ESP_LOGD(LOG_TAG, "Message queued for transmission: %x", message.identifier);
     }
     else
     {
@@ -122,15 +100,11 @@ void SaabCAN::receiveTask(void *arg)
 
     while (1)
     {
-        xSemaphoreTake(_mutex, portMAX_DELAY);
-        esp_err_t result = twai_receive(&message, pdMS_TO_TICKS(5));
-        xSemaphoreGive(_mutex);
+        esp_err_t result = twai_receive(&message, pdMS_TO_TICKS(50));
 
         if (result == ESP_OK)
         {
-            ESP_LOGD(LOG_TAG, "Message received");
-
-            ESP_LOGD(LOG_TAG, "ID: %x", message.identifier);
+            ESP_LOGD(LOG_TAG, "Received ID: %x", message.identifier);
 
             if (message.rtr)
             {
@@ -157,9 +131,13 @@ void SaabCAN::receiveTask(void *arg)
 void SaabCAN::alertTask(void *arg)
 {
     uint32_t alerts;
+    uint32_t monitoredAlerts = TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF;
+    twai_reconfigure_alerts(monitoredAlerts, NULL);
+    
     while (1)
     {
         twai_read_alerts(&alerts, portMAX_DELAY);
+
         if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
         {
             ESP_LOGI(LOG_TAG, "Surpassed Error Warning Limit");
@@ -173,19 +151,15 @@ void SaabCAN::alertTask(void *arg)
             ESP_LOGI(LOG_TAG, "Bus Off state");
             // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
             twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
-            for (int i = 3; i > 0; i--)
-            {
-                ESP_LOGW(LOG_TAG, "Initiate bus recovery in %d", i);
-                vTaskDelay(pdMS_TO_TICKS(1000));
-            }
-            twai_initiate_recovery(); // Needs 128 occurrences of bus free signal
-            ESP_LOGI(LOG_TAG, "Initiate bus recovery");
+            ESP_LOGW(LOG_TAG, "Initiating bus recovery...");
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            twai_initiate_recovery();
+            ESP_LOGI(LOG_TAG, "Bus recovery started");
         }
         if (alerts & TWAI_ALERT_BUS_RECOVERED)
         {
-            // Bus recovery was successful, exit control task to uninstall driver
             ESP_LOGI(LOG_TAG, "Bus Recovered");
-            break;
+            twai_reconfigure_alerts(monitoredAlerts, NULL);
         }
     }
 }

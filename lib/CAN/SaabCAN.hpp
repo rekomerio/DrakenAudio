@@ -63,7 +63,6 @@ private:
 
     TaskHandle_t _receiveTaskHandle = NULL;
     TaskHandle_t _alertTaskHandle = NULL;
-    SemaphoreHandle_t _mutex = NULL;
 
     const char* LOG_TAG = "CAN";
 };

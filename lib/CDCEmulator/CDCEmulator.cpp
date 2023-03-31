@@ -16,7 +16,7 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 void CDCEmulator::start()
 {
     _bt.set_auto_reconnect(false);
-    _bt.start("SAAB Draken");
+    _bt.start("Draken Audio");
 
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
@@ -25,14 +25,12 @@ void CDCEmulator::start()
 void CDCEmulator::task(void *arg)
 {
     uint32_t notifiedValue;
-    TickType_t delay = pdMS_TO_TICKS(1000);
-
     sendCDCStatus(false);
 
     while (1)
     {
         // The function will return true if an event was received and false if it timed out.
-        auto notification = xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, delay);
+        auto notification = xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, pdMS_TO_TICKS(1000));
         bool isNotification = notification == pdTRUE;
         sendCDCStatus(isNotification);
     }
@@ -59,9 +57,7 @@ void CDCEmulator::statusTask(void *arg)
         0x62, 0x00, 0x00, 0x38, 0x01, 0x00, 0x00, 0x00};
 
     uint8_t *ptrToResponse;
-
     uint32_t notifiedValue;
-    constexpr TickType_t delay = pdMS_TO_TICKS(140);
 
     while (true)
     {
@@ -83,12 +79,11 @@ void CDCEmulator::statusTask(void *arg)
             continue;
         }
 
-
         for (int i = 0; i < 4; i++)
         {
             if (i > 0)
             {
-                vTaskDelay(delay);
+                vTaskDelay(pdMS_TO_TICKS(140));
             }
         
             ESP_LOGD(LOG_TAG, "Send CDC generic status [%d]", i);
@@ -128,13 +123,13 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
                 _bt.reconnect();
             }
-            xTaskNotify(_mainTaskHandle, 0, eNoAction);
+            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status 
             break;
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
             _bt.stop();
             _bt.disconnect();
-            xTaskNotify(_mainTaskHandle, 0, eNoAction);
+            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status 
             break;
         }
 
