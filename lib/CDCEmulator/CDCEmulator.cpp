@@ -86,7 +86,7 @@ void CDCEmulator::statusTask(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(140));
             }
         
-            ESP_LOGD(LOG_TAG, "Send CDC generic status [%d]", i);
+            ESP_LOGI(LOG_TAG, "Send CDC generic status [%d]", i);
             _can->send(SAAB_CAN_ID::CDC_TO_RADIO, ptrToResponse);
             ptrToResponse += 8;
         }
@@ -202,7 +202,7 @@ void CDCEmulator::sendCDCStatus(bool hasStatusChanged)
     buffer[2] = (_isEnabled ? 0x3F : 0x01); // There are six discs in the magazine
     buffer[3] = (_isEnabled ? 0x41 : 0x01); // ToDo: check 0x01 | (discMode << 4) | 0x01
 
-    ESP_LOGD(LOG_TAG, "Send CDC status");
+    ESP_LOGI(LOG_TAG, "Send CDC status");
     _can->send(SAAB_CAN_ID::CDC_INFO, buffer);
 }
 

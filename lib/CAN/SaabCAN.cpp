@@ -20,7 +20,7 @@ void SaabCAN::start()
 
     if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK)
     {
-        ESP_LOGD(LOG_TAG, "CAN driver installed");
+        ESP_LOGI(LOG_TAG, "CAN driver installed");
     }
     else
     {
@@ -30,7 +30,7 @@ void SaabCAN::start()
 
     if (twai_start() == ESP_OK)
     {
-        ESP_LOGD(LOG_TAG, "CAN driver started");
+        ESP_LOGI(LOG_TAG, "CAN driver started");
     }
     else
     {
