@@ -118,7 +118,6 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
         {
         case RADIO_COMMAND_1::POWER_ON:
             _isEnabled = true;
-            _bt.set_auto_reconnect(true);
             if (!_bt.is_connected())
             {
                 _bt.reconnect();
