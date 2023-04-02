@@ -15,9 +15,6 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 
 void CDCEmulator::start()
 {
-    _bt.set_auto_reconnect(false);
-    _bt.start("Draken Audio");
-
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
 }
@@ -85,7 +82,7 @@ void CDCEmulator::statusTask(void *arg)
             {
                 vTaskDelay(pdMS_TO_TICKS(140));
             }
-        
+
             ESP_LOGI(LOG_TAG, "Send CDC generic status [%d]", i);
             _can->send(SAAB_CAN_ID::CDC_TO_RADIO, ptrToResponse);
             ptrToResponse += 8;
@@ -99,9 +96,11 @@ void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t *buf)
     {
     case SAAB_CAN_ID::CDC_CONTROL:
         handleRadioCommand(id, buf);
+        lastRelevantMessageReceivedAt = millis();
         break;
     case SAAB_CAN_ID::RADIO_TO_CDC:
         handleCDCStatusRequest(id, buf);
+        lastRelevantMessageReceivedAt = millis();
         break;
     }
 }
@@ -118,17 +117,15 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
         {
         case RADIO_COMMAND_1::POWER_ON:
             _isEnabled = true;
-            if (!_bt.is_connected())
-            {
-                _bt.reconnect();
-            }
-            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status 
+            _bt.start("Draken Audio");
+            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
             break;
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
             _bt.stop();
             _bt.disconnect();
-            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status 
+            _bt.end();
+            xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
             break;
         }
 

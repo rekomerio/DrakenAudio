@@ -12,13 +12,9 @@ SaabCAN::~SaabCAN()
 {
 }
 
-void SaabCAN::start()
+void SaabCAN::start(const twai_general_config_t *g_config, const twai_timing_config_t *t_config, const twai_filter_config_t *f_config)
 {
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_NORMAL);
-    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_47_619KBITS();
-    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
-
-    if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK)
+    if (twai_driver_install(g_config, t_config, f_config) == ESP_OK)
     {
         ESP_LOGI(LOG_TAG, "CAN driver installed");
     }
@@ -55,12 +51,17 @@ void SaabCAN::send(SAAB_CAN_ID id, const uint8_t *buf)
 
     memcpy(message.data, buf, SAAB_CAN_MSG_LENGTH);
 
+    send(&message);
+}
+
+void SaabCAN::send(const twai_message_t *message)
+{
     // Queue message for transmission
-    esp_err_t result = twai_transmit(&message, pdMS_TO_TICKS(20));
+    esp_err_t result = twai_transmit(message, pdMS_TO_TICKS(20));
 
     if (result == ESP_OK)
     {
-        ESP_LOGD(LOG_TAG, "Message queued for transmission: %x", message.identifier);
+        ESP_LOGD(LOG_TAG, "Message queued for transmission: %x", message->identifier);
     }
     else
     {
@@ -140,15 +141,15 @@ void SaabCAN::alertTask(void *arg)
 
         if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
         {
-            ESP_LOGI(LOG_TAG, "Surpassed Error Warning Limit");
+            ESP_LOGW(LOG_TAG, "Surpassed Error Warning Limit");
         }
         if (alerts & TWAI_ALERT_ERR_PASS)
         {
-            ESP_LOGI(LOG_TAG, "Entered Error Passive state");
+            ESP_LOGE(LOG_TAG, "Entered Error Passive state");
         }
         if (alerts & TWAI_ALERT_BUS_OFF)
         {
-            ESP_LOGI(LOG_TAG, "Bus Off state");
+            ESP_LOGE(LOG_TAG, "Bus Off state");
             // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
             twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
             ESP_LOGW(LOG_TAG, "Initiating bus recovery...");

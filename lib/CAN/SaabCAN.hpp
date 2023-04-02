@@ -1,12 +1,11 @@
 #pragma once
 
 #include <array>
-#include "../../include/defines.h"
+#include <Arduino.h>
 #include "driver/gpio.h"
 #include "driver/twai.h"
 #include "freertos/task.h"
-#include "esp_log.h"
-#include <cstring>
+#include "../../include/defines.h"
 
 #define SAAB_CAN_MSG_LENGTH 8
 #define TWAI_TIMING_CONFIG_47_619KBITS() {.brp = 80, .tseg_1 = 15, .tseg_2 = 5, .sjw = 3, .triple_sampling = false}
@@ -51,7 +50,8 @@ class SaabCAN
 public:
     SaabCAN();
     ~SaabCAN();
-    void start();
+    void start(const twai_general_config_t *g_config, const twai_timing_config_t *t_config, const twai_filter_config_t *f_config);
+    void send(const twai_message_t *message);
     void send(SAAB_CAN_ID id, const uint8_t *buf);
     void addListener(SaabCANListener *listener, SAAB_CAN_LISTENER_TYPE type);
 
@@ -66,5 +66,5 @@ private:
     TaskHandle_t _receiveTaskHandle = NULL;
     TaskHandle_t _alertTaskHandle = NULL;
 
-    const char* LOG_TAG = "CAN";
+    const char* LOG_TAG = "CANBUS";
 };
