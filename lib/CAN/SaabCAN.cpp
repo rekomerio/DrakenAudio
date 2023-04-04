@@ -153,7 +153,6 @@ void SaabCAN::alertTask(void *arg)
             // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
             twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
             ESP_LOGW(LOG_TAG, "Initiating bus recovery...");
-            vTaskDelay(pdMS_TO_TICKS(1000));
             twai_initiate_recovery();
             ESP_LOGI(LOG_TAG, "Bus recovery started");
         }

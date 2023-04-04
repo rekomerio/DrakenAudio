@@ -13,11 +13,14 @@
 SaabCAN can;
 CDCEmulator cdcEmulator;
 
+// NOTE: Only these two CAN messages can be received when using following acceptance code and mask
 constexpr uint32_t acceptanceCode = static_cast<uint32_t>(SAAB_CAN_ID::CDC_CONTROL) << 21 | static_cast<uint32_t>(SAAB_CAN_ID::RADIO_TO_CDC) << 5;
+// Set all bits to zero that we should care about in the ID's
+constexpr uint32_t acceptanceMask = ~((0x7ff << 21) | (0x7ff << 5));
 
 twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_TO_USE);
 twai_timing_config_t t_config = TWAI_TIMING_CONFIG_47_619KBITS();
-twai_filter_config_t f_config = {.acceptance_code = acceptanceCode, .acceptance_mask = 0xFFFFFFFF, .single_filter = false}; // TWAI_FILTER_CONFIG_ACCEPT_ALL();
+twai_filter_config_t f_config = {.acceptance_code = acceptanceCode, .acceptance_mask = acceptanceMask, .single_filter = false}; // TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
 void setup()
 {
@@ -39,15 +42,21 @@ void loop()
   message.ss = 0;
   message.dlc_non_comp = 0;
   message.data_length_code = SAAB_CAN_MSG_LENGTH;
-  message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::IBUS_BUTTONS);
+  message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::CDC_CONTROL);
 
   memcpy(message.data, buf, SAAB_CAN_MSG_LENGTH);
-
   can.send(&message);
+  vTaskDelay(500);
+  message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::RADIO_TO_CDC);
+  can.send(&message);
+  vTaskDelay(500);
+  message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::O_SID_MSG);
+  can.send(&message);
+  vTaskDelay(500);
 #else
-  if (millis() - cdcEmulator.lastRelevantMessageReceivedAt > 2500)
+  if (millis() - cdcEmulator.lastRelevantMessageReceivedAt > 5000)
   {
-    const int sleepInSeconds = 3;
+    const int sleepInSeconds = 1;
     esp_sleep_enable_timer_wakeup(sleepInSeconds * 1000000);
     ESP_LOGI("SLEEP", "Entering deep sleep...");
     esp_deep_sleep_start();
