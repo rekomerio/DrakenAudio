@@ -158,7 +158,7 @@ void SaabCAN::alertTask(void *arg)
         }
         if (alerts & TWAI_ALERT_BUS_RECOVERED)
         {
-            ESP_LOGI(LOG_TAG, "Bus Recovered");
+            ESP_LOGW(LOG_TAG, "Bus Recovered");
             twai_reconfigure_alerts(monitoredAlerts, NULL);
         }
     }

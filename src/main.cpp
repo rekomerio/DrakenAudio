@@ -47,19 +47,13 @@ void loop()
   memcpy(message.data, buf, SAAB_CAN_MSG_LENGTH);
   can.send(&message);
   vTaskDelay(500);
+  // This should be visible in the received messages
   message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::RADIO_TO_CDC);
   can.send(&message);
   vTaskDelay(500);
+  // This should not be received since it is not allowed by the filter
   message.identifier = static_cast<uint32_t>(SAAB_CAN_ID::O_SID_MSG);
   can.send(&message);
   vTaskDelay(500);
-#else
-  if (millis() - cdcEmulator.lastRelevantMessageReceivedAt > 5000)
-  {
-    const int sleepInSeconds = 1;
-    esp_sleep_enable_timer_wakeup(sleepInSeconds * 1000000);
-    ESP_LOGI("SLEEP", "Entering deep sleep...");
-    esp_deep_sleep_start();
-  }
 #endif
 }

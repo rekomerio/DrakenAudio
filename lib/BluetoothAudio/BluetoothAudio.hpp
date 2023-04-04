@@ -1,8 +1,8 @@
 #pragma once
 
-#include "BluetoothA2DPSink.h"
+#include "BluetoothA2DPSinkQueued.h"
 
-class BluetoothAudio : public BluetoothA2DPSink
+class BluetoothAudio : public BluetoothA2DPSinkQueued
 {
 public:
     void start(const char *name) override;

@@ -33,8 +33,6 @@ public:
 	void receive(SAAB_CAN_ID id, uint8_t *buf);
     void addCANInterface(SaabCAN *can);
 
-	uint32_t lastRelevantMessageReceivedAt = 0;
-
 private:
 	void handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf);
 	void handleCDCStatusRequest(SAAB_CAN_ID id, uint8_t *buf);

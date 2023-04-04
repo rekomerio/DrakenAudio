@@ -96,11 +96,11 @@ void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t *buf)
     {
     case SAAB_CAN_ID::CDC_CONTROL:
         handleRadioCommand(id, buf);
-        lastRelevantMessageReceivedAt = millis();
+        ESP_LOGD(LOG_TAG, "MSG: CDC_CONTROL");
         break;
     case SAAB_CAN_ID::RADIO_TO_CDC:
         handleCDCStatusRequest(id, buf);
-        lastRelevantMessageReceivedAt = millis();
+        ESP_LOGD(LOG_TAG, "MSG: RADIO_TO_CDC");
         break;
     }
 }
