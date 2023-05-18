@@ -15,6 +15,27 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 
 void CDCEmulator::start()
 {
+    i2s_config_t config = {
+            .mode = (i2s_mode_t) (I2S_MODE_MASTER | I2S_MODE_TX),
+            .sample_rate = 44100,
+            .bits_per_sample = (i2s_bits_per_sample_t)16,
+            .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
+            .communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_I2S,
+            .intr_alloc_flags = ESP_INTR_FLAG_LOWMED,
+            .dma_buf_count = 8,
+            .dma_buf_len = 64,
+            .use_apll = false,
+            #ifdef ESP_IDF_4
+			.tx_desc_auto_clear = true, // avoiding noise in case of data unavailability
+            .fixed_mclk = 0,
+            .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
+            .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT
+			#else
+			.tx_desc_auto_clear = true // avoiding noise in case of data unavailability
+            #endif
+        };
+
+    _bt.set_i2s_config(config);
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
 }
