@@ -140,6 +140,7 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             _isEnabled = true;
             if (!_bt.is_running())
             {
+                _bt.set_auto_reconnect(true, 10);
                 _bt.start("Draken Audio");
             }
             else if (!_bt.is_connected())
@@ -151,6 +152,7 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
             _bt.stop();
+            _bt.set_auto_reconnect(false);
             _bt.disconnect();
             _bt.end();
             xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
