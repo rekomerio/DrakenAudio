@@ -30,6 +30,7 @@ enum class SAAB_CAN_ID
 enum SAAB_CAN_LISTENER_TYPE : uint8_t
 {
     CDC = 0,
+    SID = 1,
     N_TYPES // Special type for keeping track of the number of listeners
 };
 

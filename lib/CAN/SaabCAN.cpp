@@ -133,33 +133,44 @@ void SaabCAN::alertTask(void *arg)
 {
     uint32_t alerts;
     uint32_t monitoredAlerts = TWAI_ALERT_ABOVE_ERR_WARN | TWAI_ALERT_ERR_PASS | TWAI_ALERT_BUS_OFF;
+    uint32_t busRecoveryStartedAt = 0;
     twai_reconfigure_alerts(monitoredAlerts, NULL);
-    
+
     while (1)
     {
-        twai_read_alerts(&alerts, portMAX_DELAY);
+        if (twai_read_alerts(&alerts, pdMS_TO_TICKS(15500)) == ESP_OK)
+        {
+            if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
+            {
+                ESP_LOGW(LOG_TAG, "Surpassed Error Warning Limit");
+            }
+            if (alerts & TWAI_ALERT_ERR_PASS)
+            {
+                ESP_LOGE(LOG_TAG, "Entered Error Passive state");
+            }
+            if (alerts & TWAI_ALERT_BUS_OFF)
+            {
+                ESP_LOGE(LOG_TAG, "Bus Off state");
+                // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
+                twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
+                ESP_LOGW(LOG_TAG, "Initiating bus recovery...");
+                twai_initiate_recovery();
+                ESP_LOGI(LOG_TAG, "Bus recovery started");
+                busRecoveryStartedAt = millis();
+            }
+            if (alerts & TWAI_ALERT_BUS_RECOVERED)
+            {
+                ESP_LOGW(LOG_TAG, "Bus Recovered");
+                twai_reconfigure_alerts(monitoredAlerts, NULL);
+                busRecoveryStartedAt = 0;
+            }
+        }
 
-        if (alerts & TWAI_ALERT_ABOVE_ERR_WARN)
+        // If the recovery takes too long: restart ESP
+        if (busRecoveryStartedAt != 0 && (millis() - 15000UL) > busRecoveryStartedAt)
         {
-            ESP_LOGW(LOG_TAG, "Surpassed Error Warning Limit");
-        }
-        if (alerts & TWAI_ALERT_ERR_PASS)
-        {
-            ESP_LOGE(LOG_TAG, "Entered Error Passive state");
-        }
-        if (alerts & TWAI_ALERT_BUS_OFF)
-        {
-            ESP_LOGE(LOG_TAG, "Bus Off state");
-            // Prepare to initiate bus recovery, reconfigure alerts to detect bus recovery completion
-            twai_reconfigure_alerts(TWAI_ALERT_BUS_RECOVERED, NULL);
-            ESP_LOGW(LOG_TAG, "Initiating bus recovery...");
-            twai_initiate_recovery();
-            ESP_LOGI(LOG_TAG, "Bus recovery started");
-        }
-        if (alerts & TWAI_ALERT_BUS_RECOVERED)
-        {
-            ESP_LOGW(LOG_TAG, "Bus Recovered");
-            twai_reconfigure_alerts(monitoredAlerts, NULL);
+            ESP_LOGW(LOG_TAG, "Restarting ESP because of too long recovery");
+            ESP.restart();
         }
     }
 }
