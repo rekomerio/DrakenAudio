@@ -11,31 +11,35 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 {
     _can = can;
     _can->addListener(this, SAAB_CAN_LISTENER_TYPE::CDC);
+    _sidMessageHandler.addCANInterface(can);
 }
 
 void CDCEmulator::start()
 {
     i2s_config_t config = {
-            .mode = (i2s_mode_t) (I2S_MODE_MASTER | I2S_MODE_TX),
-            .sample_rate = 44100,
-            .bits_per_sample = (i2s_bits_per_sample_t)16,
-            .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
-            .communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_I2S,
-            .intr_alloc_flags = ESP_INTR_FLAG_LOWMED,
-            .dma_buf_count = 8,
-            .dma_buf_len = 64,
-            .use_apll = false,
-            #ifdef ESP_IDF_4
-			.tx_desc_auto_clear = true, // avoiding noise in case of data unavailability
-            .fixed_mclk = 0,
-            .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
-            .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT
-			#else
-			.tx_desc_auto_clear = true // avoiding noise in case of data unavailability
-            #endif
-        };
+        .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+        .sample_rate = 44100,
+        .bits_per_sample = (i2s_bits_per_sample_t)16,
+        .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
+        .communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_I2S,
+        .intr_alloc_flags = ESP_INTR_FLAG_LOWMED,
+        .dma_buf_count = 8,
+        .dma_buf_len = 64,
+        .use_apll = false,
+#ifdef ESP_IDF_4
+        .tx_desc_auto_clear = true, // avoiding noise in case of data unavailability
+        .fixed_mclk = 0,
+        .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
+        .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT
+#else
+        .tx_desc_auto_clear = true // avoiding noise in case of data unavailability
+#endif
+    };
 
     _bt.set_i2s_config(config);
+    _bt.set_avrc_metadata_attribute_mask(ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST);
+    _bt.set_avrc_metadata_callback(avrcMetadataCb);
+
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
 }
@@ -111,6 +115,34 @@ void CDCEmulator::statusTask(void *arg)
     }
 }
 
+void CDCEmulator::avrcMetadata(uint8_t id, const uint8_t *data)
+{
+    static char buffer[64];
+
+    switch (id)
+    {
+    case ESP_AVRC_MD_ATTR_ARTIST:
+    {
+        // size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
+
+        // memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
+        // memcpy(_trackInfo.artist.data(), data, len);
+        // memcpy(buffer, _trackInfo.artist.data(), len);
+        // _sidMessageHandler.setMessage(_trackInfo.artist.data());
+        break;
+    }
+    case ESP_AVRC_MD_ATTR_TITLE:
+    {
+        // size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
+
+        // memcpy(_trackInfo.title.data(), data, std::min(_trackInfo.title.size(), strlen((char *)data)));
+        // memcpy(buffer, _trackInfo.artist.data(), len);
+        // _sidMessageHandler->setMessage(buffer);
+        break;
+    }
+    }
+}
+
 void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t *buf)
 {
     switch (id)
@@ -142,6 +174,8 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
                 _bt.set_auto_reconnect(true, 10);
                 _bt.start("Draken Audio");
+                _sidMessageHandler.activate();
+                _sidMessageHandler.setMessage("Draken Audio - Bluetooth for Saab");
             }
             else if (!_bt.is_connected())
             {
@@ -151,9 +185,7 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             break;
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
-            _bt.stop();
-            _bt.set_auto_reconnect(false);
-            _bt.disconnect();
+            _sidMessageHandler.disactivate();
             _bt.end();
             xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
             break;
@@ -243,4 +275,9 @@ void CDCEmulator::taskCb(void *arg)
 void CDCEmulator::statusTaskCb(void *arg)
 {
     cdcInstance->statusTask(arg);
+}
+
+void CDCEmulator::avrcMetadataCb(uint8_t id, const uint8_t *data)
+{
+    cdcInstance->avrcMetadata(id, data);
 }
