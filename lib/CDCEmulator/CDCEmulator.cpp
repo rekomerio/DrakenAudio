@@ -11,7 +11,7 @@ void CDCEmulator::addCANInterface(SaabCAN *can)
 {
     _can = can;
     _can->addListener(this, SAAB_CAN_LISTENER_TYPE::CDC);
-    _sidMessageHandler.addCANInterface(can);
+    // _sidMessageHandler.addCANInterface(can);
 }
 
 void CDCEmulator::start()
@@ -42,6 +42,7 @@ void CDCEmulator::start()
 
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
+    // _sidMessageHandler.start();
 }
 
 void CDCEmulator::task(void *arg)
@@ -174,8 +175,8 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
                 _bt.set_auto_reconnect(true, 10);
                 _bt.start("Draken Audio");
-                _sidMessageHandler.activate();
-                _sidMessageHandler.setMessage("Draken Audio - Bluetooth for Saab");
+                // _sidMessageHandler.activate();
+                // _sidMessageHandler.setMessage("Draken Audio - Bluetooth for Saab");
             }
             else if (!_bt.is_connected())
             {
@@ -185,7 +186,7 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             break;
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
-            _sidMessageHandler.disactivate();
+            // _sidMessageHandler.disactivate();
             _bt.end();
             xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
             break;

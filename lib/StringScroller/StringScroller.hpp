@@ -25,7 +25,7 @@ private:
     std::array<char, 64> _scrolledString;
     size_t _maxLength;
     size_t _scrollIndex;
-    size_t _originalStringLength;
+    size_t _originalStringLength = 0;
     size_t _nPaddingAdded;
     PADDING_STATE _paddingState;
 };

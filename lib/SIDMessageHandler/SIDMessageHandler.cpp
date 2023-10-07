@@ -4,6 +4,7 @@ SIDMessageHandler *sidMessageHandlerInstance;
 
 SIDMessageHandler::SIDMessageHandler()
 {
+    sidMessageHandlerInstance = this;
 }
 
 void SIDMessageHandler::start()
@@ -89,7 +90,7 @@ void SIDMessageHandler::task(void *arg)
     uint32_t notifiedValue;
     while (1)
     {
-        requestWrite();
+        // requestWrite();
         _isBreakthroughRequested = false;
         xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, pdMS_TO_TICKS(1000));
     }
