@@ -9,8 +9,8 @@ SIDMessageHandler::SIDMessageHandler()
 
 void SIDMessageHandler::start()
 {
-    xTaskCreatePinnedToCore(taskCb, "SIDTask", 2048, NULL, 1, &_taskHandle, SAAB_TASK_CORE);
-    xTaskCreatePinnedToCore(scrollTaskCb, "SIDScrollTask", 512, NULL, 1, NULL, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(requestWriteTaskCb, "SIDReqWriteTask", 2048, NULL, 1, &_requestWriteTaskHandle, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(scrollTaskCb, "SIDScrollTask", 2048, NULL, 1, NULL, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(sendTaskCb, "SIDSendTask", 2048, NULL, 1, &_sendTaskHandle, SAAB_TASK_CORE);
 }
 
@@ -18,7 +18,7 @@ void SIDMessageHandler::setMessage(const char *message)
 {
     static char buffer[64];
     utf_convert(message, buffer, strlen(message));
-    _stringScroller.setString(message, 12);
+    _stringScroller.setString(message, SID_MAX_CHARACTERS);
 }
 
 void SIDMessageHandler::addCANInterface(SaabCAN *can)
@@ -29,11 +29,11 @@ void SIDMessageHandler::addCANInterface(SaabCAN *can)
 
 void SIDMessageHandler::requestWrite()
 {
-    static uint8_t buf[8] = {0x1F, 0x02, 0x00, static_cast<uint8_t>(SID_ID::SPA), 0x00, 0x00, 0x00, 0x00};
+    static uint8_t buf[8] = {0x1F, 0x02, 0x00, static_cast<uint8_t>(SID_COMMUNICATION_ID::SPA), 0x00, 0x00, 0x00, 0x00};
 
     if (_isActive)
     {
-        buf[2] = (_isBreakthroughRequested ? 0x01 : 0x05);
+        buf[2] = (_isWriteRequested ? 0x01 : 0x05);
     }
     else
     {
@@ -54,7 +54,7 @@ void SIDMessageHandler::receive(SAAB_CAN_ID id, uint8_t *buf)
     {
     case SAAB_CAN_ID::TEXT_PRIORITY:
     {
-        bool writeAccessReceived = buf[0] == 0x02 && buf[1] == static_cast<uint8_t>(SID_ID::SPA);
+        bool writeAccessReceived = buf[0] == 0x02 && buf[1] == static_cast<uint8_t>(SID_COMMUNICATION_ID::SPA);
         if (writeAccessReceived)
         {
             // We want to display message and have received permission to do so
@@ -68,16 +68,17 @@ void SIDMessageHandler::receive(SAAB_CAN_ID id, uint8_t *buf)
         if (radioRequestedWrite)
         {
             // Radio wants to write to SID, but so do we, lets override it
-            requestBreakthrough();
+            requestWrite();
         }
+        break;
     }
     }
 }
 
-void SIDMessageHandler::requestBreakthrough()
+void SIDMessageHandler::requestWrite()
 {
-    _isBreakthroughRequested = true;
-    xTaskNotify(_taskHandle, 0, eNoAction);
+    _isWriteRequested = true;
+    xTaskNotify(_requestWriteTaskHandle, 0, eNoAction);
 }
 
 void SIDMessageHandler::sendMessage()
@@ -85,13 +86,13 @@ void SIDMessageHandler::sendMessage()
     xTaskNotify(_sendTaskHandle, 0, eNoAction);
 }
 
-void SIDMessageHandler::task(void *arg)
+void SIDMessageHandler::requestWriteTask(void *arg)
 {
     uint32_t notifiedValue;
     while (1)
     {
-        // requestWrite();
-        _isBreakthroughRequested = false;
+        requestWrite();
+        _isWriteRequested = false;
         xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, pdMS_TO_TICKS(1000));
     }
 }
@@ -112,7 +113,7 @@ void SIDMessageHandler::scrollTask(void *arg)
 void SIDMessageHandler::sendTask(void *arg)
 {
     uint32_t notifiedValue;
-    static uint8_t buffer[24];
+    uint8_t buffer[8];
 
     while (1)
     {
@@ -129,11 +130,11 @@ void SIDMessageHandler::sendTask(void *arg)
                 buffer[0] = 0x42; // Message order, 7th bit is set to indicate new message
                 buffer[1] = 0x96;
                 buffer[2] = 0x82; // Row 2 + some bit to indicate the text has changed?
-                buffer[3] = message[msgIndex++];
-                buffer[4] = message[msgIndex++];
-                buffer[5] = message[msgIndex++];
-                buffer[6] = message[msgIndex++];
-                buffer[7] = message[msgIndex++];
+                buffer[3] = message[0];
+                buffer[4] = message[1];
+                buffer[5] = message[2];
+                buffer[6] = message[3];
+                buffer[7] = message[4];
                 break;
             }
             case 1:
@@ -141,11 +142,11 @@ void SIDMessageHandler::sendTask(void *arg)
                 buffer[0] = 0x01; // Message order
                 buffer[1] = 0x96;
                 buffer[2] = 0x82;
-                buffer[3] = message[msgIndex++];
-                buffer[4] = message[msgIndex++];
-                buffer[5] = message[msgIndex++];
-                buffer[6] = message[msgIndex++];
-                buffer[7] = message[msgIndex++];
+                buffer[3] = message[5];
+                buffer[4] = message[6];
+                buffer[5] = message[7];
+                buffer[6] = message[8];
+                buffer[7] = message[9];
                 break;
             }
             case 2:
@@ -153,16 +154,13 @@ void SIDMessageHandler::sendTask(void *arg)
                 buffer[0] = 0x00; // Message order
                 buffer[1] = 0x96;
                 buffer[2] = 0x82;
-                buffer[3] = message[msgIndex++];
-                buffer[4] = message[msgIndex++];
+                buffer[3] = message[10];
+                buffer[4] = message[11];
                 buffer[5] = 0;
                 buffer[6] = 0;
                 buffer[7] = 0;
                 break;
             }
-
-            default:
-                break;
             }
 
             if (i > 0)
@@ -176,9 +174,9 @@ void SIDMessageHandler::sendTask(void *arg)
     }
 }
 
-void SIDMessageHandler::taskCb(void *arg)
+void SIDMessageHandler::requestWriteTaskCb(void *arg)
 {
-    sidMessageHandlerInstance->task(arg);
+    sidMessageHandlerInstance->requestWriteTask(arg);
 }
 
 void SIDMessageHandler::scrollTaskCb(void *arg)

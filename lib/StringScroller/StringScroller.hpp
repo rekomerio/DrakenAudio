@@ -1,4 +1,5 @@
 #pragma once
+
 #include <array>
 #include <stdint.h>
 #include <algorithm>
@@ -23,9 +24,9 @@ private:
 
     std::array<char, 64> _originalString;
     std::array<char, 64> _scrolledString;
-    size_t _maxLength;
-    size_t _scrollIndex;
+    size_t _maxLength = 0;
+    size_t _scrollIndex = 0;
     size_t _originalStringLength = 0;
-    size_t _nPaddingAdded;
+    size_t _nPaddingAdded = 0;
     PADDING_STATE _paddingState;
 };

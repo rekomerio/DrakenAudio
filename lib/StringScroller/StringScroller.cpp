@@ -10,9 +10,10 @@ void StringScroller::setString(const char* str, size_t maxLength)
 	memcpy(_originalString.data(), str, _originalStringLength);
 	memcpy(_scrolledString.data(), str, _originalStringLength);
 
-	_scrolledString[maxLength] = '\0';
+	_maxLength = std::min(maxLength, _scrolledString.size() - 1);
 
-	_maxLength = maxLength;
+	_scrolledString[_maxLength] = '\0';
+
 	_nPaddingAdded = 0;
 	_scrollIndex = 0;
 

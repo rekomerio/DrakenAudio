@@ -15,10 +15,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-#ifndef UTF_CONVERT_H_
-#define UTF_CONVERT_H_
+#pragma once
 
 void utf_convert(const char *from, char *to, int size);
-
-#endif UTF_CONVERT_H_
