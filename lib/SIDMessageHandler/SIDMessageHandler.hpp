@@ -22,7 +22,6 @@ public:
     void setMessage(const char *message);
     void receive(SAAB_CAN_ID id, uint8_t *buf);
     void addCANInterface(SaabCAN *can);
-    void requestWrite();
     void activate() { _isActive = true; }
     void disactivate() { _isActive = false; }
 
@@ -38,7 +37,7 @@ private:
 
     bool _isActive = false;
     bool _hasWritePermission = false;
-    bool _isWriteRequested = false;
+    bool _isOtherDeviceTryingToWrite = false;
     SaabCAN *_can = NULL;
     StringScroller _stringScroller;
     TaskHandle_t _requestWriteTaskHandle = NULL;

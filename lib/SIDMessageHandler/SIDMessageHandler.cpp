@@ -33,7 +33,7 @@ void SIDMessageHandler::requestWrite()
 
     if (_isActive)
     {
-        buf[2] = (_isWriteRequested ? 0x01 : 0x05);
+        buf[2] = (_isOtherDeviceTryingToWrite ? 0x01 : 0x05);
     }
     else
     {
@@ -68,17 +68,12 @@ void SIDMessageHandler::receive(SAAB_CAN_ID id, uint8_t *buf)
         if (radioRequestedWrite)
         {
             // Radio wants to write to SID, but so do we, lets override it
-            requestWrite();
+            _isOtherDeviceTryingToWrite = true;
+            xTaskNotify(_requestWriteTaskHandle, 0, eNoAction);
         }
         break;
     }
     }
-}
-
-void SIDMessageHandler::requestWrite()
-{
-    _isWriteRequested = true;
-    xTaskNotify(_requestWriteTaskHandle, 0, eNoAction);
 }
 
 void SIDMessageHandler::sendMessage()
@@ -92,7 +87,7 @@ void SIDMessageHandler::requestWriteTask(void *arg)
     while (1)
     {
         requestWrite();
-        _isWriteRequested = false;
+        _isOtherDeviceTryingToWrite = false;
         xTaskNotifyWait(0, ULONG_MAX, &notifiedValue, pdMS_TO_TICKS(1000));
     }
 }
