@@ -5,6 +5,9 @@ CDCEmulator *cdcInstance;
 CDCEmulator::CDCEmulator()
 {
     cdcInstance = this;
+
+    memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
+    memset(_trackInfo.title.data(), 0, _trackInfo.title.size());
 }
 
 void CDCEmulator::addCANInterface(SaabCAN *can)
@@ -39,6 +42,7 @@ void CDCEmulator::start()
     _bt.set_i2s_config(config);
     _bt.set_avrc_metadata_attribute_mask(ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST);
     _bt.set_avrc_metadata_callback(avrcMetadataCb);
+    _bt.set_on_connection_state_changed(onConnectionChanged);
 
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
@@ -118,27 +122,30 @@ void CDCEmulator::statusTask(void *arg)
 
 void CDCEmulator::avrcMetadata(uint8_t id, const uint8_t *data)
 {
-    static char buffer[64];
+    static char buffer[SID_MESSAGE_BUFFER_SIZE];
 
     switch (id)
     {
     case ESP_AVRC_MD_ATTR_ARTIST:
     {
-        // size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
+        size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
 
-        // memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
-        // memcpy(_trackInfo.artist.data(), data, len);
-        // memcpy(buffer, _trackInfo.artist.data(), len);
-        // _sidMessageHandler.setMessage(_trackInfo.artist.data());
+        memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
+        memcpy(_trackInfo.artist.data(), data, len);
+
+        sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
+        _sidMessageHandler.setMessage(buffer);
         break;
     }
     case ESP_AVRC_MD_ATTR_TITLE:
     {
-        // size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
+        size_t len = std::min(_trackInfo.title.size(), strlen((char *)data));
 
-        // memcpy(_trackInfo.title.data(), data, std::min(_trackInfo.title.size(), strlen((char *)data)));
-        // memcpy(buffer, _trackInfo.artist.data(), len);
-        // _sidMessageHandler->setMessage(buffer);
+        memset(_trackInfo.title.data(), 0, _trackInfo.title.size());
+        memcpy(_trackInfo.title.data(), data, len);
+
+        sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
+        _sidMessageHandler.setMessage(buffer);
         break;
     }
     }
@@ -213,9 +220,11 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
                     break;
                 case 3:
                     _bt.reconnect();
+                    _sidMessageHandler.showNotification("Reconnect", 1000);
                     break;
                 case 6:
                     _bt.disconnect();
+                    _sidMessageHandler.showNotification("Disconnect", 1000);
                     break;
                 }
                 break;
@@ -281,4 +290,14 @@ void CDCEmulator::statusTaskCb(void *arg)
 void CDCEmulator::avrcMetadataCb(uint8_t id, const uint8_t *data)
 {
     cdcInstance->avrcMetadata(id, data);
+}
+
+void CDCEmulator::onConnectionChanged(esp_a2d_connection_state_t state, void *)
+{
+    switch (state)
+    {
+    case ESP_A2D_CONNECTION_STATE_CONNECTED:
+        cdcInstance->_sidMessageHandler.showNotification("Connected!", 1000);
+        break;
+    }
 }

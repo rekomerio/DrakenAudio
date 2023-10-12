@@ -29,8 +29,8 @@ enum RADIO_COMMAND_1
 
 struct TrackInfo
 {
-	std::array<char, 32> artist;
-	std::array<char, 32> title;
+	std::array<char, SID_MESSAGE_BUFFER_SIZE / 2> artist;
+	std::array<char, SID_MESSAGE_BUFFER_SIZE / 2> title;
 };
 
 class CDCEmulator : public SaabCANListener 
@@ -51,6 +51,7 @@ private:
 	static void taskCb(void *arg);
 	static void statusTaskCb(void *arg);
 	static void avrcMetadataCb(uint8_t id, const uint8_t *data);
+	static void onConnectionChanged(esp_a2d_connection_state_t state, void *);
 
 	bool _isEnabled = false;
 	BluetoothAudio _bt;

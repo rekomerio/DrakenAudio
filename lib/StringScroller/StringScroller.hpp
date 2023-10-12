@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <algorithm>
 #include <cstring>
+#include "../../include/defines.h"
 
 class StringScroller
 {
@@ -22,8 +23,8 @@ private:
 
     char nextToken(size_t index);
 
-    std::array<char, 64> _originalString;
-    std::array<char, 64> _scrolledString;
+    std::array<char, SID_MESSAGE_BUFFER_SIZE> _originalString;
+    std::array<char, SID_MESSAGE_BUFFER_SIZE> _scrolledString;
     size_t _maxLength = 0;
     size_t _scrollIndex = 0;
     size_t _originalStringLength = 0;
