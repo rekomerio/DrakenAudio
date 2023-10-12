@@ -48,6 +48,7 @@ private:
     bool _isOtherDeviceTryingToWrite = false;
     uint8_t _messageStatusFlag = 0;
     int _dropNotificationAt = 0;
+    char _buffer[SID_MESSAGE_BUFFER_SIZE];
     SaabCAN *_can = NULL;
     StringScroller _stringScroller;
     StringScroller _stringScrollerCopy;

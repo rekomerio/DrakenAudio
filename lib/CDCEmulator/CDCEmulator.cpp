@@ -205,12 +205,15 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
             case RADIO_COMMAND_1::NXT:
                 _bt.play();
+                _sidMessageHandler.showNotification("Play", 500);
                 break;
             case RADIO_COMMAND_1::SEEK_NEXT:
                 _bt.next();
+                _sidMessageHandler.showNotification("Next track", 750);
                 break;
             case RADIO_COMMAND_1::SEEK_PREV:
                 _bt.previous();
+                _sidMessageHandler.showNotification("Previous track", 1000);
                 break;
             case RADIO_COMMAND_1::IHU_BTN:
                 switch (buf[2])

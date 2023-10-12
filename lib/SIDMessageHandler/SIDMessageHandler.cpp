@@ -23,17 +23,23 @@ void SIDMessageHandler::addCANInterface(SaabCAN *can)
 
 void SIDMessageHandler::setMessage(const char *message)
 {
-    static char buffer[SID_MESSAGE_BUFFER_SIZE];
-    utf_convert(message, buffer, strlen(message));
-    _stringScroller.setString(message, SID_MAX_CHARACTERS);
-    // Notification will be cancelled at this point
-    _dropNotificationAt = 0;
+    utf_convert(message, _buffer, strlen(message));
+    if (_dropNotificationAt == 0 || _dropNotificationAt - millis() > 50)
+    {
+        _stringScroller.setString(_buffer, SID_MAX_CHARACTERS);
+    }
+    else
+    {
+        // Let the notification be displayed for a while, the notification task will pick up the message later
+        _stringScrollerCopy.setString(_buffer, SID_MAX_CHARACTERS);
+    }
 }
 
 void SIDMessageHandler::showNotification(const char *message, int durationMs)
 {
     memcpy(&_stringScrollerCopy, &_stringScroller, sizeof(StringScroller));
-    setMessage(message);
+    utf_convert(message, _buffer, strlen(message));
+    _stringScroller.setString(_buffer, SID_MAX_CHARACTERS);
     _dropNotificationAt = millis() + durationMs;
     _isMessageOverrideRequired = true;
 }
