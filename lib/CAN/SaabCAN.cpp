@@ -34,7 +34,7 @@ void SaabCAN::start(const twai_general_config_t *g_config, const twai_timing_con
         assert(0);
     }
 
-    xTaskCreatePinnedToCore(receiveTaskCb, "CANReceive", 4096, NULL, 1, &_receiveTaskHandle, SAAB_TASK_CORE);
+    xTaskCreatePinnedToCore(receiveTaskCb, "CANReceive", 4096, NULL, 2, &_receiveTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(alertTaskCb, "CANAlerts", 2048, NULL, 1, &_alertTaskHandle, SAAB_TASK_CORE);
 }
 
@@ -62,9 +62,18 @@ void SaabCAN::send(const twai_message_t *message)
     if (result == ESP_OK)
     {
         ESP_LOGD(LOG_TAG, "Message queued for transmission: %x", message->identifier);
+        _nFailedConsecutiveEnqueues = 0;
     }
     else
     {
+        _nFailedConsecutiveEnqueues++;
+
+        if (_nFailedConsecutiveEnqueues > 10)
+        {
+            ESP_LOGE(LOG_TAG, "Too many failed consecutive transmission attempts. Restarting...");
+            ESP.restart();
+        }
+
         ESP_LOGE(LOG_TAG, "Failed to queue message for transmission");
 
         switch (result)

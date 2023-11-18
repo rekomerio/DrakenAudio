@@ -11,7 +11,6 @@ SIDMessageHandler::SIDMessageHandler()
 void SIDMessageHandler::start()
 {
     xTaskCreatePinnedToCore(notificationTaskCb, "SIDNotificationTask", 2048, NULL, 1, NULL, SAAB_TASK_CORE);
-    xTaskCreatePinnedToCore(scrollTaskCb, "SIDScrollTask", 2048, NULL, 1, NULL, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(sendTaskCb, "SIDSendTask", 2048, NULL, 1, &_sendTaskHandle, SAAB_TASK_CORE);
 }
 
@@ -71,19 +70,13 @@ void SIDMessageHandler::receive(SAAB_CAN_ID id, uint8_t *buf)
     {
         switch (buf[0])
         {
-        case 42:
-            _messageStatusFlag |= 1 << 2;
-            break;
-        case 1:
-            _messageStatusFlag |= 1 << 1;
-            break;
         case 0:
-            _messageStatusFlag |= 1 << 0;
+            _messageStatusFlag = 1 << 0;
             break;
         }
 
-        constexpr uint8_t messageCompleteFlag = 1 << 2 | 1 << 1 | 1 << 0;
-        // Check if all three parts of message from radio have been received and immediately send new message to override it
+        constexpr uint8_t messageCompleteFlag = 1 << 0;
+
         if (_messageStatusFlag == messageCompleteFlag)
         {
             _messageStatusFlag = 0;
@@ -93,35 +86,31 @@ void SIDMessageHandler::receive(SAAB_CAN_ID id, uint8_t *buf)
     }
 }
 
-void SIDMessageHandler::scrollTask(void *arg)
-{
-    while (1)
-    {
-        vTaskDelay(pdMS_TO_TICKS(250));
-
-        if (_isActive)
-        {
-            _stringScroller.scroll();
-        }
-    }
-}
-
 void SIDMessageHandler::sendTask(void *arg)
 {
     uint32_t notifiedValue;
     uint8_t buffer[8];
+    uint8_t scrollCounter = 0;
 
     while (1)
     {
-        if (!_isActive || !isWriteAllowed(2, SID_COMMUNICATION_ID::RADIO))
-        {
-            vTaskDelay(pdMS_TO_TICKS(10));
-            continue;
-        }
+        // if (!_isActive || !isWriteAllowed(2, SID_COMMUNICATION_ID::RADIO))
+        // {
+        //     vTaskDelay(pdMS_TO_TICKS(50));
+        //     continue;
+        // }
 
         if (!_isMessageOverrideRequired)
         {
             vTaskDelay(pdMS_TO_TICKS(250));
+            
+            scrollCounter++;
+            
+            if (scrollCounter & 1 == 1)
+            {
+                _stringScroller.scroll();
+                scrollCounter = 0;
+            }
         }
         else
         {
@@ -130,6 +119,7 @@ void SIDMessageHandler::sendTask(void *arg)
 
         uint8_t msgIndex = 0;
         const char *message = _stringScroller.getScrolledString();
+        ESP_LOGW(LOG_TAG, "%s", message);
         for (int i = 0; i < 3; i++)
         {
             switch (i)
@@ -177,8 +167,8 @@ void SIDMessageHandler::sendTask(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(10));
             }
 
-            ESP_LOGI(LOG_TAG, "Send SID message [%d]", i);
-            _can->send(SAAB_CAN_ID::RADIO_TO_SID_TEXT, buffer);
+            // ESP_LOGI(LOG_TAG, "Send SID message [%d]", i);
+            // _can->send(SAAB_CAN_ID::RADIO_TO_SID_TEXT, buffer);
         }
     }
 }
@@ -196,11 +186,6 @@ void SIDMessageHandler::notificationTask(void *arg)
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-}
-
-void SIDMessageHandler::scrollTaskCb(void *arg)
-{
-    sidMessageHandlerInstance->scrollTask(arg);
 }
 
 void SIDMessageHandler::sendTaskCb(void *arg)

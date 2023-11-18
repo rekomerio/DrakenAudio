@@ -20,7 +20,7 @@ constexpr uint32_t acceptanceMask = ~((0x7ff << 21) | (0x7ff << 5));
 
 twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_19, GPIO_NUM_18, TWAI_MODE_TO_USE);
 twai_timing_config_t t_config = TWAI_TIMING_CONFIG_47_619KBITS();
-twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); // {.acceptance_code = acceptanceCode, .acceptance_mask = acceptanceMask, .single_filter = false}; 
+twai_filter_config_t f_config = {.acceptance_code = acceptanceCode, .acceptance_mask = acceptanceMask, .single_filter = false}; //TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
 void setup()
 {

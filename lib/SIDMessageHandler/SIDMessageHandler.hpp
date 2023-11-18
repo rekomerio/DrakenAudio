@@ -34,11 +34,8 @@ public:
 
 private:
     bool isWriteAllowed(uint8_t row, SID_COMMUNICATION_ID communicationId);
-    void sendMessage();
-    void scrollTask(void *arg);
     void sendTask(void *arg);
     void notificationTask(void *arg);
-    static void scrollTaskCb(void *arg);
     static void sendTaskCb(void *arg);
     static void notificationTaskCb(void *arg);
 

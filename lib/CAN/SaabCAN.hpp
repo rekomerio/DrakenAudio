@@ -69,5 +69,6 @@ private:
     TaskHandle_t _receiveTaskHandle = NULL;
     TaskHandle_t _alertTaskHandle = NULL;
 
+    uint8_t _nFailedConsecutiveEnqueues = 0;
     const char* LOG_TAG = "CANBUS";
 };

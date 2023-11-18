@@ -43,10 +43,10 @@ void CDCEmulator::start()
     _bt.set_avrc_metadata_attribute_mask(ESP_AVRC_MD_ATTR_TITLE | ESP_AVRC_MD_ATTR_ARTIST);
     _bt.set_avrc_metadata_callback(avrcMetadataCb);
     _bt.set_on_connection_state_changed(onConnectionChanged);
-
+    
     xTaskCreatePinnedToCore(taskCb, "CDCMain", 2048, NULL, 2, &_mainTaskHandle, SAAB_TASK_CORE);
     xTaskCreatePinnedToCore(statusTaskCb, "CDCStat", 2048, NULL, 2, &_statusTaskHandle, SAAB_TASK_CORE);
-    _sidMessageHandler.start();
+    // _sidMessageHandler.start();
 }
 
 void CDCEmulator::task(void *arg)
@@ -122,33 +122,33 @@ void CDCEmulator::statusTask(void *arg)
 
 void CDCEmulator::avrcMetadata(uint8_t id, const uint8_t *data)
 {
-    static char buffer[SID_MESSAGE_BUFFER_SIZE];
+    // static char buffer[SID_MESSAGE_BUFFER_SIZE];
 
-    switch (id)
-    {
-    case ESP_AVRC_MD_ATTR_ARTIST:
-    {
-        size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
+    // switch (id)
+    // {
+    // case ESP_AVRC_MD_ATTR_ARTIST:
+    // {
+    //     size_t len = std::min(_trackInfo.artist.size(), strlen((char *)data));
 
-        memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
-        memcpy(_trackInfo.artist.data(), data, len);
+    //     memset(_trackInfo.artist.data(), 0, _trackInfo.artist.size());
+    //     memcpy(_trackInfo.artist.data(), data, len);
 
-        sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
-        _sidMessageHandler.setMessage(buffer);
-        break;
-    }
-    case ESP_AVRC_MD_ATTR_TITLE:
-    {
-        size_t len = std::min(_trackInfo.title.size(), strlen((char *)data));
+    //     sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
+    //     _sidMessageHandler.setMessage(buffer);
+    //     break;
+    // }
+    // case ESP_AVRC_MD_ATTR_TITLE:
+    // {
+    //     size_t len = std::min(_trackInfo.title.size(), strlen((char *)data));
 
-        memset(_trackInfo.title.data(), 0, _trackInfo.title.size());
-        memcpy(_trackInfo.title.data(), data, len);
+    //     memset(_trackInfo.title.data(), 0, _trackInfo.title.size());
+    //     memcpy(_trackInfo.title.data(), data, len);
 
-        sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
-        _sidMessageHandler.setMessage(buffer);
-        break;
-    }
-    }
+    //     sprintf(buffer, "%s - %s", _trackInfo.artist.data(), _trackInfo.title.data());
+    //     _sidMessageHandler.setMessage(buffer);
+    //     break;
+    // }
+    // }
 }
 
 void CDCEmulator::receive(SAAB_CAN_ID id, uint8_t *buf)
@@ -182,8 +182,8 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
                 _bt.set_auto_reconnect(true, 10);
                 _bt.start("Draken Audio");
-                _sidMessageHandler.setMessage("Draken Audio - Bluetooth for Saab");
-                _sidMessageHandler.activate();
+                // _sidMessageHandler.setMessage("Draken Audio - Bluetooth for Saab");
+                // _sidMessageHandler.activate();
             }
             else if (!_bt.is_connected())
             {
@@ -193,7 +193,7 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             break;
         case RADIO_COMMAND_1::POWER_OFF:
             _isEnabled = false;
-            _sidMessageHandler.disactivate();
+            // _sidMessageHandler.disactivate();
             _bt.end();
             xTaskNotify(_mainTaskHandle, 0, eNoAction); // Send CDC status
             break;
@@ -205,15 +205,15 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
             {
             case RADIO_COMMAND_1::NXT:
                 _bt.play();
-                _sidMessageHandler.showNotification("Play", 500);
+                // _sidMessageHandler.showNotification("Play", 500);
                 break;
             case RADIO_COMMAND_1::SEEK_NEXT:
                 _bt.next();
-                _sidMessageHandler.showNotification("Next track", 750);
+                // _sidMessageHandler.showNotification("Next track", 750);
                 break;
             case RADIO_COMMAND_1::SEEK_PREV:
                 _bt.previous();
-                _sidMessageHandler.showNotification("Previous track", 1000);
+                // _sidMessageHandler.showNotification("Previous track", 1000);
                 break;
             case RADIO_COMMAND_1::IHU_BTN:
                 switch (buf[2])
@@ -223,11 +223,11 @@ void CDCEmulator::handleRadioCommand(SAAB_CAN_ID id, uint8_t *buf)
                     break;
                 case 3:
                     _bt.reconnect();
-                    _sidMessageHandler.showNotification("Reconnect", 1000);
+                    // _sidMessageHandler.showNotification("Reconnect", 1000);
                     break;
                 case 6:
                     _bt.disconnect();
-                    _sidMessageHandler.showNotification("Disconnect", 1000);
+                    // _sidMessageHandler.showNotification("Disconnect", 1000);
                     break;
                 }
                 break;
@@ -300,7 +300,7 @@ void CDCEmulator::onConnectionChanged(esp_a2d_connection_state_t state, void *)
     switch (state)
     {
     case ESP_A2D_CONNECTION_STATE_CONNECTED:
-        cdcInstance->_sidMessageHandler.showNotification("Connected!", 1000);
+        // cdcInstance->_sidMessageHandler.showNotification("Connected", 1000);
         break;
     }
 }
