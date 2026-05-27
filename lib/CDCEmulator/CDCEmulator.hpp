@@ -3,7 +3,6 @@
 #include <array>
 #include "BluetoothAudio.hpp"
 #include "SaabCAN.hpp"
-#include "SIDMessageHandler.hpp"
 
 enum RADIO_COMMAND_0
 {
@@ -27,12 +26,6 @@ enum RADIO_COMMAND_1
 	UNMUTE = 0xB1,
 };
 
-struct TrackInfo
-{
-	std::array<char, SID_MESSAGE_BUFFER_SIZE / 2> artist;
-	std::array<char, SID_MESSAGE_BUFFER_SIZE / 2> title;
-};
-
 class CDCEmulator : public SaabCANListener 
 {
 public:
@@ -47,19 +40,14 @@ private:
 	void sendCDCStatus(bool hasStatusChanged);
 	void task(void *arg);
 	void statusTask(void *arg);
-	void avrcMetadata(uint8_t id, const uint8_t *data);
 	static void taskCb(void *arg);
 	static void statusTaskCb(void *arg);
-	static void avrcMetadataCb(uint8_t id, const uint8_t *data);
-	static void onConnectionChanged(esp_a2d_connection_state_t state, void *);
 
 	bool _isEnabled = false;
 	BluetoothAudio _bt;
 	SaabCAN *_can = NULL;
 	TaskHandle_t _mainTaskHandle = NULL;
 	TaskHandle_t _statusTaskHandle = NULL;
-	TrackInfo _trackInfo;
-	SIDMessageHandler _sidMessageHandler;
 
 	const char* LOG_TAG = "CDC";
 };
